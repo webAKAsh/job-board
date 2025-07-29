@@ -7,25 +7,38 @@ dotenv.config();
 
 const app = express();
 const corsOptions = {
-  origin: "https://job-board-frontend-snowy.vercel.app/", // Replace with your frontend Vercel URL
+  origin: "https://job-board-frontend-snowy.vercel.app", // Replace with your frontend Vercel URL
   methods: ["GET", "POST"],
   allowedHeaders: ["Content-Type"],
 };
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// MongoDB Connection
-mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/job-board", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 20000,
-    maxPoolSize: 10,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
-  })
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+// MongoDB Connection Singleton
+let cachedDb = null;
+async function connectToDatabase() {
+  if (cachedDb && mongoose.connection.readyState === 1) {
+    console.log("Reusing existing MongoDB connection");
+    return cachedDb;
+  }
+  console.log("Establishing new MongoDB connection");
+  const db = await mongoose.connect(
+    process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/job-board",
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000, // 30s timeout
+      maxPoolSize: 5, // Smaller pool for serverless
+      socketTimeoutMS: 60000, // 60s socket timeout
+      connectTimeoutMS: 30000, // 30s connection timeout
+      retryWrites: true,
+      w: "majority",
+    }
+  );
+  cachedDb = db;
+  console.log("MongoDB connected");
+  return db;
+}
 
 // Root Route
 app.get("/", (req, res) => {
@@ -50,8 +63,21 @@ const jobSchema = new mongoose.Schema(
 
 const Job = mongoose.model("Job", jobSchema);
 
+// Middleware to ensure DB connection
+const ensureDbConnected = async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (err) {
+    console.error("Database connection error:", err);
+    res
+      .status(500)
+      .json({ error: "Database connection failed", details: err.message });
+  }
+};
+
 // API Routes
-app.get("/api/jobs", async (req, res) => {
+app.get("/api/jobs", ensureDbConnected, async (req, res) => {
   try {
     const { search } = req.query;
     let query = {};
@@ -73,7 +99,7 @@ app.get("/api/jobs", async (req, res) => {
   }
 });
 
-app.get("/api/jobs/:id", async (req, res) => {
+app.get("/api/jobs/:id", ensureDbConnected, async (req, res) => {
   try {
     const job = await Job.findById(req.params.id);
     if (!job) return res.status(404).json({ error: "Job not found" });
@@ -86,7 +112,7 @@ app.get("/api/jobs/:id", async (req, res) => {
   }
 });
 
-app.post("/api/jobs", async (req, res) => {
+app.post("/api/jobs", ensureDbConnected, async (req, res) => {
   try {
     const { title, company, type, location, description } = req.body;
     if (!title || !company || !type || !location || !description) {
