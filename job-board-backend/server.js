@@ -6,32 +6,24 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: "https://job-board-frontend-snowy.vercel.app/", // Replace with your frontend Vercel URL
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // MongoDB Connection
 mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/job-board", {
+  .connect(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/job-board", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
   .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
+  .catch((err) => console.error("MongoDB connection error:", err));
 
-// Job Schema
-const jobSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  company: { type: String, required: true },
-  type: { type: String, required: true },
-  location: { type: String, required: true },
-  description: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const Job = mongoose.model("Job", jobSchema);
-
-// API Routes
-
+// Root Route
 app.get("/", (req, res) => {
   res.json({
     message:
@@ -39,6 +31,22 @@ app.get("/", (req, res) => {
   });
 });
 
+// Job Schema
+const jobSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    company: { type: String, required: true },
+    type: { type: String, required: true },
+    location: { type: String, required: true },
+    description: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { collection: "jobs" }
+);
+
+const Job = mongoose.model("Job", jobSchema);
+
+// API Routes
 app.get("/api/jobs", async (req, res) => {
   try {
     const { search } = req.query;
@@ -54,7 +62,10 @@ app.get("/api/jobs", async (req, res) => {
     const jobs = await Job.find(query);
     res.json(jobs);
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    console.error("Error fetching jobs:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch jobs", details: err.message });
   }
 });
 
@@ -64,7 +75,10 @@ app.get("/api/jobs/:id", async (req, res) => {
     if (!job) return res.status(404).json({ error: "Job not found" });
     res.json(job);
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    console.error("Error fetching job:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to fetch job", details: err.message });
   }
 });
 
@@ -78,8 +92,17 @@ app.post("/api/jobs", async (req, res) => {
     await job.save();
     res.status(201).json(job);
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    console.error("Error creating job:", err);
+    res
+      .status(500)
+      .json({ error: "Failed to create job", details: err.message });
   }
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Server error", details: err.message });
 });
 
 const PORT = process.env.PORT || 5000;
