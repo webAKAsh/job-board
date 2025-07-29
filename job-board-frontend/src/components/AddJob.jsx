@@ -34,7 +34,7 @@ const AddJob = () => {
     }
     setLoading(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/jobs`, formData);
+      await axios.post(`${import.meta.env.VITE_API_URL}api/jobs`, formData);
       navigate("/");
     } catch (err) {
       console.error(err);

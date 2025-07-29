@@ -12,7 +12,7 @@ const Home = () => {
     const fetchJobs = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/jobs`, {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}api/jobs`, {
           params: { search },
         });
         setJobs(response.data);
