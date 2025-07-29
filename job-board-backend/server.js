@@ -34,6 +34,14 @@ const jobSchema = new mongoose.Schema(
 const Job = mongoose.model("Job", jobSchema);
 
 // API Routes
+
+app.get("/", (req, res) => {
+  res.json({
+    message:
+      "Job Board Backend API is running. Use /api/jobs to access job listings.",
+  });
+});
+
 app.get("/api/jobs", async (req, res) => {
   try {
     const { search } = req.query;
